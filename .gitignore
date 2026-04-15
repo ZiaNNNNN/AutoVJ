@@ -4,3 +4,6 @@ server/.cache/
 *.log
 .DS_Store
 dist/
+.claude/
+package-lock 2.json
+start-dev.sh
