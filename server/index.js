@@ -33,11 +33,18 @@ await coverFetcher.scanLocalCovers();
 // Express app
 const app = express();
 
-// CORS for frontend dev server
+// CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   next();
 });
+
+// Serve frontend static files (built with `npm run build`)
+const distDir = join(import.meta.dirname, '..', 'dist');
+if (existsSync(distDir)) {
+  app.use(express.static(distDir));
+  console.log('[Server] Serving frontend from dist/');
+}
 
 // Serve local meta/ cover images
 for (const dir of MUSIC_DIRS) {
