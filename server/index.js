@@ -10,8 +10,10 @@ import { CoverFetcher } from './coverFetcher.js';
 import { SongAnalyzer } from './songAnalyzer.js';
 
 const PORT = 3456;
+// Add your music folders here. External drives mount at /Volumes/DriveName/
 const MUSIC_DIRS = [
   join(homedir(), 'Music/网易云音乐'),
+  // '/Volumes/你的硬盘名/Library',  ← uncomment and rename
 ];
 
 // Initialize components
