@@ -69,9 +69,14 @@ app.get('/api/state', (req, res) => {
   });
 });
 
-// API: rescan LRC files
-app.post('/api/rescan', (req, res) => {
+// API: rescan LRC files + re-broadcast current decks
+app.post('/api/rescan', async (req, res) => {
   const count = lrcIndex.scan();
+  // Re-broadcast deck info so covers reload
+  const decks = serato.getCurrentDecks();
+  for (const [deck, info] of Object.entries(decks)) {
+    sendTrackInfo(null, deck, info);
+  }
   res.json({ count });
 });
 

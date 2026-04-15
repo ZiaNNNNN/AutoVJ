@@ -114,6 +114,13 @@ async function init() {
 
   manager.onModeChange = (name, index) => overlay.setMode(name, index);
 
+  // Force server to re-send deck info after 2 seconds (ensures covers are loaded)
+  setTimeout(async () => {
+    try {
+      await fetch('http://localhost:3456/api/rescan', { method: 'POST' });
+    } catch {}
+  }, 2000);
+
   // Event listeners
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('resize', onResize);
@@ -320,7 +327,8 @@ document.getElementById('folder-btn')?.addEventListener('click', () => {
         body: formData,
       });
       const data = await res.json();
-      statusEl.textContent = `Loaded ${data.count} tracks from ${folderName}`;
+      statusEl.textContent = `✓ ${data.count} tracks loaded from ${folderName} — click Start`;
+      statusEl.style.color = '#3a86ff';
     } catch (err) {
       statusEl.textContent = `Error: ${err.message}`;
     }
