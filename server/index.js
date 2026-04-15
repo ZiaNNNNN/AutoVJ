@@ -51,6 +51,16 @@ for (const dir of MUSIC_DIRS) {
   app.use('/music-covers', express.static(dir));
 }
 
+// Serve any cover file by base64url-encoded path
+app.get('/cover-file/:hash', (req, res) => {
+  try {
+    const filePath = Buffer.from(req.params.hash, 'base64url').toString();
+    res.sendFile(filePath);
+  } catch {
+    res.status(404).send('not found');
+  }
+});
+
 // API: get current state
 app.get('/api/state', (req, res) => {
   res.json({
@@ -196,23 +206,15 @@ async function sendTrackInfo(ws, deck, info) {
   sendFn(msg);
 
   // Fetch cover: 1) same-name file → 2) NetEase local → 3) iTunes API
-  let coverPath = lrcIndex.findCover(trackName); // same-name .jpg/.png
+  let coverPath = lrcIndex.findCover(trackName);
   if (!coverPath) {
     coverPath = await coverFetcher.fetchCover(searchArtist, searchTitle);
   }
   if (coverPath) {
-    let coverUrl;
-    if (coverPath.includes('/meta/')) {
-      const filename = coverPath.split('/').pop();
-      coverUrl = `http://localhost:${PORT}/meta/${filename}`;
-    } else if (coverPath.includes('.cache')) {
-      const filename = coverPath.split('/').pop();
-      coverUrl = `http://localhost:${PORT}/covers/${filename}`;
-    } else {
-      // Same-name cover: serve from music dir
-      coverUrl = `http://localhost:${PORT}/music-covers/${encodeURIComponent(coverPath.split('/').pop())}`;
-    }
-    console.log(`[Cover] Sending URL: ${coverUrl}`);
+    // Use hash-based URL to avoid path/encoding issues
+    const coverHash = Buffer.from(coverPath).toString('base64url');
+    const coverUrl = `http://localhost:${PORT}/cover-file/${coverHash}`;
+    console.log(`[Cover] Sending: ${coverPath.split('/').pop()}`);
     sendFn({
       type: 'cover',
       deck,
