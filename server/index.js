@@ -212,6 +212,7 @@ async function sendTrackInfo(ws, deck, info) {
       // Same-name cover: serve from music dir
       coverUrl = `http://localhost:${PORT}/music-covers/${encodeURIComponent(coverPath.split('/').pop())}`;
     }
+    console.log(`[Cover] Sending URL: ${coverUrl}`);
     sendFn({
       type: 'cover',
       deck,

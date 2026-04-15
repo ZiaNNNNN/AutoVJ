@@ -111,9 +111,9 @@ export class SeratoSync {
         if (existing) {
           existing.coverUrl = data.coverUrl;
         }
-        if (data.deck === this.activeDeck) {
-          this.onCoverReady?.(data.coverUrl);
-        }
+        // Always send cover - let main.js decide
+        console.log(`[SeratoSync] Cover ready for deck ${data.deck}: ${data.coverUrl?.slice(-30)}`);
+        this.onCoverReady?.(data.coverUrl);
         break;
       }
 

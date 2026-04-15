@@ -56,22 +56,20 @@ async function init() {
   seratoSync = new SeratoSync();
   seratoSync.onTrackChange = onSeratoTrackChange;
   seratoSync.onCoverReady = (coverUrl) => {
-    // Only apply cover if the active deck is actually playing
-    const activeDeckInfo = seratoSync.decks.get(seratoSync.activeDeck);
-    if (activeDeckInfo && activeDeckInfo.playing) {
-      manager.setCoverImage(coverUrl);
-    }
+    // Always apply cover when it arrives for the active deck
+    // (it may arrive before or after the play event)
+    manager.setCoverImage(coverUrl);
   };
   seratoSync.onConnectionChange = (connected) => {
     // Silent connection status
   };
   seratoSync.onPlayStateChange = (deck, playing, estimatedPosition) => {
-    if (playing && deck === seratoSync.activeDeck) {
-      // Track started playing on active deck → NOW switch cover + start lyrics
+    if (playing) {
+      // Any deck starts playing → switch to it and load everything
       const info = seratoSync.decks.get(deck);
       if (info) {
         if (info.coverUrl) manager.setCoverImage(info.coverUrl);
-        lyricsRenderer.setLyrics(info.lyrics);
+        if (info.lyrics) lyricsRenderer.setLyrics(info.lyrics);
         lyricsRenderer.start();
         if (estimatedPosition > 0) {
           lyricsRenderer.adjustOffset(estimatedPosition);
