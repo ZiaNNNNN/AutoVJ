@@ -78,9 +78,9 @@ export class SeratoSync {
 
         this.decks.set(data.deck, trackInfo);
 
-        // Priority logic: auto-switch to this deck if it's playing,
-        // or if no deck is currently active
-        if (data.playing || !this.activeDeck) {
+        // Only auto-switch if no deck is active yet.
+        // Otherwise wait for playstate change to switch.
+        if (!this.activeDeck) {
           this._setActiveDeck(data.deck);
         }
 
@@ -111,9 +111,11 @@ export class SeratoSync {
         if (existing) {
           existing.coverUrl = data.coverUrl;
         }
-        // Always send cover - let main.js decide
-        console.log(`[SeratoSync] Cover ready for deck ${data.deck}: ${data.coverUrl?.slice(-30)}`);
-        this.onCoverReady?.(data.coverUrl);
+        // Only send cover if this is the active deck AND it's playing
+        if (data.deck === this.activeDeck && existing?.playing) {
+          console.log(`[SeratoSync] Cover ready: ${data.coverUrl?.slice(-30)}`);
+          this.onCoverReady?.(data.coverUrl);
+        }
         break;
       }
 
