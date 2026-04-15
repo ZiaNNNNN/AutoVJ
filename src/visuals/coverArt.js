@@ -13,8 +13,6 @@ const fragmentShader = `
 precision highp float;
 
 uniform sampler2D uTexture;
-uniform sampler2D uPrevTexture;  // previous cover for crossfade
-uniform float uHasPrevTexture;
 uniform float uTime;
 uniform float uBass;
 uniform float uMid;
@@ -337,40 +335,24 @@ void main() {
   float scanline = sin(vUv.y * uResolution.y * 0.5) * 0.015;
   color -= scanline * 0.5;
 
-  // ---- Song transition: crossfade with beat-reactive effects (3-5s) ----
-  if (uTransition > 0.01 && uTransition < 0.99 && uHasPrevTexture > 0.5) {
-    float t = uTransition; // 0→1 over ~4 seconds
+  // ---- Song transition effect ----
+  if (uTransition > 0.01 && uTransition < 0.99) {
+    // 0→0.5: current song fades out with zoom + white flash
+    // 0.5→1: new song fades in
+    float fadeOut = smoothstep(0.0, 0.5, uTransition);   // 0→1 during first half
+    float fadeIn = smoothstep(0.5, 1.0, uTransition);    // 0→1 during second half
 
-    // Sample previous cover (gentle zoom out)
-    vec2 prevUv = fitCover(vUv);
-    prevUv = (prevUv - 0.5) * (1.0 + t * 0.1) + 0.5; // slow zoom
-    vec3 prevColor = sampleWithBleed(prevUv, vUv);
+    // White flash at peak (0.5)
+    float flash = 1.0 - abs(uTransition - 0.5) * 2.0;   // peaks at 0.5
+    flash = pow(flash, 3.0) * 0.8;
 
-    // Simple crossfade blend: old stays dominant for first 60%, then new takes over
-    float blend = smoothstep(0.3, 0.9, t); // old visible until 30%, fully new at 90%
+    // Zoom blur during transition
+    float zoomBlur = sin(uTransition * 3.14159) * 0.3;
+    vec2 zDir = (vUv - 0.5);
+    color = mix(color, color * 0.3, fadeOut * (1.0 - fadeIn));
 
-    // Beat-reactive intensity during transition
-    float beatPunch = uBeat * sin(t * 3.14159) * 0.3;
-
-    // Crossfade the two covers
-    color = mix(prevColor, color, blend);
-
-    // Chromatic aberration burst peaks in the middle of transition
-    float transAb = sin(t * 3.14159) * 0.01;
-    vec2 abDir = normalize(vUv - 0.5 + 0.001) * transAb;
-    color.r = mix(
-      sampleWithBleed(prevUv + abDir, vUv).r,
-      sampleWithBleed(coverUv + abDir, vUv).r,
-      blend
-    );
-    color.b = mix(
-      sampleWithBleed(prevUv - abDir, vUv).b,
-      sampleWithBleed(coverUv - abDir, vUv).b,
-      blend
-    );
-
-    // Subtle brightness pulse at midpoint
-    color += beatPunch * 0.15;
+    // Add white flash
+    color = mix(color, vec3(1.0), flash);
   }
 
   // Clamp
@@ -385,10 +367,10 @@ export class CoverArtVisual {
     this.scene = new THREE.Scene();
     this.textureLoader = new THREE.TextureLoader();
     this.currentTexture = null;
-    this.prevTexture = null; // previous cover for crossfade
+    this.nextTexture = null; // for crossfade transitions
 
     // Transition state
-    this.transition = 0;
+    this.transition = 0;       // 0 = no transition, 1 = fully transitioned
     this.transitioning = false;
     this._pendingUrl = null;
 
@@ -430,8 +412,6 @@ export class CoverArtVisual {
     this.material = new THREE.ShaderMaterial({
       uniforms: {
         uTexture: { value: null },
-        uPrevTexture: { value: null },
-        uHasPrevTexture: { value: 0 },
         uTime: { value: 0 },
         uBass: { value: 0 },
         uMid: { value: 0 },
@@ -468,27 +448,11 @@ export class CoverArtVisual {
       return;
     }
 
+    // If we already have a cover, trigger a transition
     if (this.currentTexture) {
-      // Don't restart transition if one is already running
-      if (this.transitioning) {
-        console.log('[Cover] Transition already running, skipping');
-        return;
-      }
-
-      // Move current texture to prevTexture for crossfade
-      if (this.prevTexture) this.prevTexture.dispose();
-      this.prevTexture = this.currentTexture;
-      this.currentTexture = null;
-      this.material.uniforms.uPrevTexture.value = this.prevTexture;
-      this.material.uniforms.uHasPrevTexture.value = 1;
-
-      // Start transition
+      this._pendingUrl = url;
       this.transitioning = true;
       this.transition = 0;
-      console.log('[Cover] Starting 4s crossfade transition');
-
-      // Load new texture
-      this._loadTexture(url);
     } else {
       // First load: just load directly
       this._loadTexture(url);
@@ -502,6 +466,7 @@ export class CoverArtVisual {
     this._frameCount = 0;
 
     this.textureLoader.load(url, (texture) => {
+      if (this.currentTexture) this.currentTexture.dispose();
       texture.minFilter = THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
       this.currentTexture = texture;
@@ -519,23 +484,22 @@ export class CoverArtVisual {
     u.uBeat.value = analyzer.beatIntensity;
     u.uKick.value = analyzer.kick || 0;
 
-    // --- Transition animation (~4 seconds) ---
+    // --- Transition animation ---
     if (this.transitioning) {
-      this.transition += 0.004; // ~0.004 per frame at 60fps ≈ 4 seconds
+      this.transition += 0.015; // ~1 second total transition
       u.uTransition.value = this.transition;
+
+      // At halfway point, swap the texture
+      if (this.transition >= 0.5 && this._pendingUrl) {
+        this._loadTexture(this._pendingUrl);
+        this._pendingUrl = null;
+      }
 
       // Transition complete
       if (this.transition >= 1.0) {
         this.transitioning = false;
         this.transition = 0;
         u.uTransition.value = 0;
-        // Clean up prev texture
-        if (this.prevTexture) {
-          this.prevTexture.dispose();
-          this.prevTexture = null;
-          u.uPrevTexture.value = null;
-          u.uHasPrevTexture.value = 0;
-        }
       }
     }
 
