@@ -4,7 +4,6 @@ Real-time audio-reactive visual engine for DJs. Automatically syncs with Serato 
 
 ![AutoVJ Demo](docs/demo.gif)
 
-> **Record your own demo**: Start DJing with AutoVJ, then run `./scripts/record-demo.sh` (requires ffmpeg: `brew install ffmpeg`)
 
 ## What It Does
 
