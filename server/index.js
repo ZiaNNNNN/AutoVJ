@@ -132,6 +132,13 @@ app.post('/api/upload-folder', upload.array('files'), async (req, res) => {
   await coverFetcher.scanLocalCovers();
 
   console.log(`[Server] Uploaded folder: ${folderName} → ${destDir} (${lrcCount} lyrics total)`);
+
+  // Re-send current deck info to all clients (now with covers from the new folder)
+  const decks = serato.getCurrentDecks();
+  for (const [deck, info] of Object.entries(decks)) {
+    sendTrackInfo(null, deck, info);
+  }
+
   res.json({ count: lrcCount, folder: folderName });
 });
 

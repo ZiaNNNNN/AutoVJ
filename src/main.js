@@ -281,35 +281,49 @@ document.getElementById('start-btn').addEventListener('click', init);
 // Show library status on load
 fetch('http://localhost:3456/api/folders').then(r => r.json()).then(data => {
   const statusEl = document.getElementById('folder-status');
-  if (statusEl) statusEl.textContent = `${data.folders.length} folder(s) · ${data.folders.map(f => f.split('/').pop()).join(', ')}`;
+  if (statusEl) statusEl.textContent = `${data.folders.length} folder(s) loaded`;
 }).catch(() => {
   const statusEl = document.getElementById('folder-status');
   if (statusEl) statusEl.textContent = 'Backend not running — start with ./start.sh';
 });
 
-// Add folder by path
-document.getElementById('folder-btn')?.addEventListener('click', async () => {
-  const input = document.getElementById('folder-input');
-  const path = input.value.trim();
-  if (!path) return;
+// Folder picker: select folder, upload .lrc and .jpg files to backend
+document.getElementById('folder-btn')?.addEventListener('click', () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.webkitdirectory = true;
+  input.addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (!files.length) return;
 
-  const statusEl = document.getElementById('folder-status');
-  statusEl.textContent = 'Scanning...';
+    const folderName = files[0].webkitRelativePath.split('/')[0];
+    const statusEl = document.getElementById('folder-status');
+    statusEl.textContent = `Uploading ${folderName}...`;
 
-  try {
-    const res = await fetch('http://localhost:3456/api/add-folder', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path }),
-    });
-    const data = await res.json();
-    if (data.error) {
-      statusEl.textContent = `Error: ${data.error}`;
-    } else {
-      statusEl.textContent = `Added! ${data.count} tracks total`;
-      input.value = '';
+    const formData = new FormData();
+    let count = 0;
+    for (const file of files) {
+      if (/\.(lrc|jpg|jpeg|png|webp)$/i.test(file.name)) {
+        formData.append('files', file, file.webkitRelativePath);
+        count++;
+      }
     }
-  } catch (err) {
-    statusEl.textContent = `Error: ${err.message}`;
-  }
+
+    if (count === 0) {
+      statusEl.textContent = 'No .lrc or image files found in folder';
+      return;
+    }
+
+    try {
+      const res = await fetch('http://localhost:3456/api/upload-folder', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      statusEl.textContent = `Loaded ${data.count} tracks from ${folderName}`;
+    } catch (err) {
+      statusEl.textContent = `Error: ${err.message}`;
+    }
+  });
+  input.click();
 });
