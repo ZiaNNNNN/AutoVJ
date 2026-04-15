@@ -1,0 +1,23 @@
+{
+  "name": "autovj",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Real-time audio-driven visual generator for DJs",
+  "scripts": {
+    "start": "bash start.sh",
+    "dev": "PATH=/usr/local/Cellar/node@22/22.22.2_1/bin:$PATH vite --host",
+    "server": "PATH=/usr/local/Cellar/node@22/22.22.2_1/bin:$PATH node server/index.js",
+    "analyze": "PATH=/usr/local/Cellar/node@22/22.22.2_1/bin:$PATH node server/preanalyze.js",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
+    "better-sqlite3": "^12.9.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "three": "^0.183.2",
+    "vite": "^8.0.8",
+    "ws": "^8.20.0"
+  }
+}
