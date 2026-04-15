@@ -346,56 +346,31 @@ void main() {
     prevUv = (prevUv - 0.5) * (1.0 + t * 0.1) + 0.5; // slow zoom
     vec3 prevColor = sampleWithBleed(prevUv, vUv);
 
-    // Blend curve: old cover stays visible longer, new one comes in late
-    // At t=0.5, blend is only ~0.25 (old still dominant)
-    float blend = pow(t, 1.6); // skewed toward late transition
+    // Simple crossfade blend: old stays dominant for first 60%, then new takes over
+    float blend = smoothstep(0.3, 0.9, t); // old visible until 30%, fully new at 90%
 
-    // Beat-reactive transition effects
-    float beatPunch = uBeat * (1.0 - abs(t - 0.5) * 2.0); // strongest in the middle
+    // Beat-reactive intensity during transition
+    float beatPunch = uBeat * sin(t * 3.14159) * 0.3;
 
-    // Effect 1: Diagonal wipe with noise edge (random per transition)
-    float wipeAngle = uSongSeed * 6.28;
-    float wipeDir = dot(vUv - 0.5, vec2(cos(wipeAngle), sin(wipeAngle)));
-    float wipeEdge = fbm(vUv * 5.0 + uTime) * 0.15;
-    float wipe = smoothstep(-0.3, 0.3, wipeDir - (t - 0.5) * 1.5 + wipeEdge);
+    // Crossfade the two covers
+    color = mix(prevColor, color, blend);
 
-    // Effect 2: Radial reveal from center on beat
-    float radial = length(vUv - 0.5);
-    float radialReveal = smoothstep(t * 1.2, t * 1.2 - 0.15, radial);
-
-    // Mix the two transition styles based on song seed
-    float styleMix = fract(uSongSeed * 7.3);
-    float transBlend;
-    if (styleMix < 0.33) {
-      transBlend = wipe; // diagonal wipe
-    } else if (styleMix < 0.66) {
-      transBlend = mix(blend, radialReveal, 0.5); // radial blend
-    } else {
-      transBlend = mix(wipe, blend, 0.5 + beatPunch * 0.3); // beat-modulated hybrid
-    }
-
-    // Apply the crossfade
-    color = mix(prevColor, color, clamp(transBlend, 0.0, 1.0));
-
-    // Chromatic aberration burst during transition
-    float transAberration = sin(t * 3.14159) * 0.012;
-    vec2 transAbDir = normalize(vUv - 0.5 + 0.001) * transAberration;
-    vec3 mixedR = mix(
-      sampleWithBleed(prevUv + transAbDir, vUv),
-      sampleWithBleed(coverUv + transAbDir, vUv),
-      clamp(transBlend, 0.0, 1.0)
+    // Chromatic aberration burst peaks in the middle of transition
+    float transAb = sin(t * 3.14159) * 0.01;
+    vec2 abDir = normalize(vUv - 0.5 + 0.001) * transAb;
+    color.r = mix(
+      sampleWithBleed(prevUv + abDir, vUv).r,
+      sampleWithBleed(coverUv + abDir, vUv).r,
+      blend
     );
-    vec3 mixedB = mix(
-      sampleWithBleed(prevUv - transAbDir, vUv),
-      sampleWithBleed(coverUv - transAbDir, vUv),
-      clamp(transBlend, 0.0, 1.0)
+    color.b = mix(
+      sampleWithBleed(prevUv - abDir, vUv).b,
+      sampleWithBleed(coverUv - abDir, vUv).b,
+      blend
     );
-    color.r = mix(color.r, mixedR.r, 0.5);
-    color.b = mix(color.b, mixedB.b, 0.5);
 
-    // Subtle flash at midpoint
-    float flash = pow(1.0 - abs(t - 0.5) * 2.0, 4.0) * 0.2 * (1.0 + beatPunch);
-    color += flash;
+    // Subtle brightness pulse at midpoint
+    color += beatPunch * 0.15;
   }
 
   // Clamp
@@ -494,6 +469,12 @@ export class CoverArtVisual {
     }
 
     if (this.currentTexture) {
+      // Don't restart transition if one is already running
+      if (this.transitioning) {
+        console.log('[Cover] Transition already running, skipping');
+        return;
+      }
+
       // Move current texture to prevTexture for crossfade
       if (this.prevTexture) this.prevTexture.dispose();
       this.prevTexture = this.currentTexture;
@@ -504,6 +485,7 @@ export class CoverArtVisual {
       // Start transition
       this.transitioning = true;
       this.transition = 0;
+      console.log('[Cover] Starting 4s crossfade transition');
 
       // Load new texture
       this._loadTexture(url);
