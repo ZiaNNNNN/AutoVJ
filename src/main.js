@@ -56,19 +56,20 @@ async function init() {
   seratoSync = new SeratoSync();
   seratoSync.onTrackChange = onSeratoTrackChange;
   seratoSync.onCoverReady = (coverUrl) => {
-    // Always apply cover when it arrives for the active deck
-    // (it may arrive before or after the play event)
-    manager.setCoverImage(coverUrl);
+    // Check local library first (from folder picker), then use server cover
+    const info = seratoSync.decks.get(seratoSync.activeDeck);
+    const localCover = info ? findLocalCover(info.name) : null;
+    manager.setCoverImage(localCover || coverUrl);
   };
   seratoSync.onConnectionChange = (connected) => {
     // Silent connection status
   };
   seratoSync.onPlayStateChange = (deck, playing, estimatedPosition) => {
     if (playing) {
-      // Any deck starts playing → switch to it and load everything
       const info = seratoSync.decks.get(deck);
       if (info) {
-        if (info.coverUrl) manager.setCoverImage(info.coverUrl);
+        const localCover = findLocalCover(info.name);
+        manager.setCoverImage(localCover || info.coverUrl);
         if (info.lyrics) lyricsRenderer.setLyrics(info.lyrics);
         lyricsRenderer.start();
         if (estimatedPosition > 0) {
@@ -78,10 +79,10 @@ async function init() {
     }
   };
   seratoSync.onActiveDeckSwitch = (deck, info) => {
-    // Active deck switched (e.g. crossfade) → transition to new cover
-    if (info && info.playing && info.coverUrl) {
-      manager.setCoverImage(info.coverUrl);
-      lyricsRenderer.setLyrics(info.lyrics);
+    if (info && info.playing) {
+      const localCover = findLocalCover(info.name);
+      if (localCover || info.coverUrl) manager.setCoverImage(localCover || info.coverUrl);
+      if (info.lyrics) lyricsRenderer.setLyrics(info.lyrics);
       lyricsRenderer.start();
     }
   };
@@ -283,6 +284,26 @@ function onResize() {
   manager.resize(w, h);
 }
 
+// Find cover from local browser library (loaded via folder picker)
+function findLocalCover(trackName) {
+  if (!window.__localLibrary || !trackName) return null;
+  const lib = window.__localLibrary;
+  const normalized = trackName.toLowerCase().replace(/\s+/g, '');
+
+  // Exact match
+  if (lib.has(normalized) && lib.get(normalized).coverUrl) {
+    return lib.get(normalized).coverUrl;
+  }
+
+  // Fuzzy match
+  for (const [key, data] of lib) {
+    if (data.coverUrl && (normalized.includes(key) || key.includes(normalized))) {
+      return data.coverUrl;
+    }
+  }
+  return null;
+}
+
 document.getElementById('start-btn').addEventListener('click', init);
 
 // Show library status on load
@@ -294,7 +315,10 @@ fetch('http://localhost:3456/api/folders').then(r => r.json()).then(data => {
   if (statusEl) statusEl.textContent = 'Backend not running — start with ./start.sh';
 });
 
-// Folder picker: select folder, upload .lrc and .jpg files to backend
+// Folder picker: read .lrc and .jpg files directly in browser (no server upload)
+// Stored as: songName -> { lrc: string, coverUrl: blobUrl }
+window.__localLibrary = new Map();
+
 document.getElementById('folder-btn')?.addEventListener('click', () => {
   const input = document.createElement('input');
   input.type = 'file';
@@ -305,35 +329,35 @@ document.getElementById('folder-btn')?.addEventListener('click', () => {
 
     const folderName = files[0].webkitRelativePath.split('/')[0];
     const statusEl = document.getElementById('folder-status');
-    statusEl.textContent = `Uploading ${folderName}...`;
+    statusEl.textContent = `Reading ${folderName}...`;
 
-    const formData = new FormData();
-    let count = 0;
+    const library = window.__localLibrary;
+    const filesByName = new Map();
+
     for (const file of files) {
-      if (/\.(lrc|jpg|jpeg|png|webp)$/i.test(file.name)) {
-        formData.append('files', file, file.webkitRelativePath);
+      const name = file.name;
+      const ext = name.split('.').pop().toLowerCase();
+      const baseName = name.replace(/\.[^.]+$/, '');
+
+      if (!filesByName.has(baseName)) filesByName.set(baseName, {});
+
+      if (ext === 'lrc') {
+        filesByName.get(baseName).lrc = await file.text();
+      } else if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+        filesByName.get(baseName).coverUrl = URL.createObjectURL(file);
+      }
+    }
+
+    let count = 0;
+    for (const [name, data] of filesByName) {
+      if (data.lrc || data.coverUrl) {
+        library.set(name.toLowerCase().replace(/\s+/g, ''), { ...data, originalName: name });
         count++;
       }
     }
 
-    if (count === 0) {
-      statusEl.textContent = 'No .lrc or image files found in folder';
-      return;
-    }
-
-    try {
-      const res = await fetch('http://localhost:3456/api/upload-folder', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      statusEl.textContent = `✓ ${data.count} tracks loaded — reloading...`;
-      statusEl.style.color = '#3a86ff';
-      // Reload page so all state is clean with the new folder
-      setTimeout(() => location.reload(), 1000);
-    } catch (err) {
-      statusEl.textContent = `Error: ${err.message}`;
-    }
+    statusEl.textContent = `✓ ${count} tracks from ${folderName}`;
+    statusEl.style.color = '#3a86ff';
   });
   input.click();
 });
