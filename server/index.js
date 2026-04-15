@@ -11,10 +11,50 @@ import { CoverFetcher } from './coverFetcher.js';
 import { SongAnalyzer } from './songAnalyzer.js';
 
 const PORT = 3456;
-const MUSIC_DIRS = [
-  join(homedir(), 'Desktop/dj/lyrics_and_covers'),
-  join(homedir(), 'Music/网易云音乐'),  // fallback
-];
+
+// Auto-detect music folders: local dirs + any external drive with .lrc files
+import { existsSync, readdirSync as readdir, statSync } from 'fs';
+
+function detectMusicDirs() {
+  const dirs = [
+    join(homedir(), 'Desktop/dj/lyrics_and_covers'),
+    join(homedir(), 'Music/网易云音乐'),
+  ];
+
+  // Scan /Volumes/ for external drives
+  try {
+    for (const vol of readdir('/Volumes')) {
+      if (vol === 'Macintosh HD') continue; // skip system drive
+      const volPath = `/Volumes/${vol}`;
+      try {
+        // Check common folder names for lyrics/covers
+        const candidates = [
+          join(volPath, 'lyrics_and_covers'),
+          join(volPath, 'DJ', 'lyrics_and_covers'),
+          join(volPath, 'dj', 'lyrics_and_covers'),
+          join(volPath, 'Music', 'lyrics_and_covers'),
+          volPath, // root of drive
+        ];
+        for (const candidate of candidates) {
+          if (existsSync(candidate) && statSync(candidate).isDirectory()) {
+            // Check if it has any .lrc files
+            const files = readdir(candidate);
+            if (files.some(f => f.endsWith('.lrc'))) {
+              dirs.push(candidate);
+              console.log(`[AutoDetect] Found music folder: ${candidate}`);
+              break;
+            }
+          }
+        }
+      } catch {}
+    }
+  } catch {}
+
+  return dirs.filter(d => { try { return existsSync(d); } catch { return false; } });
+}
+
+const MUSIC_DIRS = detectMusicDirs();
+console.log(`[Config] Music folders: ${MUSIC_DIRS.join(', ')}`);
 
 // Initialize components
 const serato = new SeratoWatcher();
