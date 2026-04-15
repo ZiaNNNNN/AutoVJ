@@ -183,7 +183,8 @@ function animate() {
       `L0: ${effectNames[L[0].effectId]||'?'} ${L[0].intensity.toFixed(3)}  ` +
       `L1: ${effectNames[L[1].effectId]||'?'} ${L[1].intensity.toFixed(3)}  ` +
       `L2: ${effectNames[L[2].effectId]||'?'} ${L[2].intensity.toFixed(3)}` +
-      (ca.transitioning ? `  TRANSITION ${(ca.transition*100).toFixed(0)}%` : '');
+      (ca.transitioning ? `  TRANSITION ${(ca.transition*100).toFixed(0)}%` : '') +
+      `\nactive: deck ${seratoSync.activeDeck || '?'}`;
   }
 }
 

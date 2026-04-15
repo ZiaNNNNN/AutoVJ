@@ -9,8 +9,8 @@ export class SeratoSync {
     this.connected = false;
 
     // Deck state
-    this.decks = new Map(); // deck -> { name, artist, title, lyrics, coverUrl, playing, startTime, bpm }
-    this.activeDeck = null; // which deck controls lyrics/cover
+    this.decks = new Map();
+    this.activeDeck = null;
 
     // Callbacks
     this.onTrackChange = null;      // (trackInfo) - active deck changed track
@@ -76,12 +76,21 @@ export class SeratoSync {
           coverUrl: data.coverUrl,
         };
 
+        const prevTrack = this.decks.get(data.deck);
         this.decks.set(data.deck, trackInfo);
 
-        // Only auto-switch if no deck is active yet.
-        // Otherwise wait for playstate change to switch.
         if (!this.activeDeck) {
+          // No active deck yet → use this one
           this._setActiveDeck(data.deck);
+        } else if (data.deck === this.activeDeck && prevTrack && prevTrack.name !== data.name) {
+          // Active deck loaded a NEW song (replacing old one).
+          // This means the DJ finished transitioning and is preparing the next mix.
+          // → Switch visual to the OTHER deck if it's playing.
+          const otherDeck = this._findOtherPlayingDeck(data.deck);
+          if (otherDeck) {
+            console.log(`[SeratoSync] Active deck loaded new track → switching to deck ${otherDeck}`);
+            this._setActiveDeck(otherDeck);
+          }
         }
 
         console.log(`[SeratoSync] Deck ${data.deck}: ${data.name} (${data.playing ? 'playing' : 'loaded'})`);
@@ -94,12 +103,16 @@ export class SeratoSync {
           existing.playing = data.playing;
         }
 
-        // When a deck starts playing, switch lyrics to it
-        if (data.playing) {
-          this._setActiveDeck(data.deck);
+        if (!data.playing && data.deck === this.activeDeck) {
+          // Active deck stopped → switch to other playing deck
+          const otherDeck = this._findOtherPlayingDeck(data.deck);
+          if (otherDeck) {
+            console.log(`[SeratoSync] Active deck stopped → switching to deck ${otherDeck}`);
+            this._setActiveDeck(otherDeck);
+            this.onPlayStateChange?.(otherDeck, true, 0);
+          }
+        } else if (data.playing && data.deck === this.activeDeck) {
           this.onPlayStateChange?.(data.deck, true, data.estimatedPosition);
-        } else {
-          this.onPlayStateChange?.(data.deck, false, 0);
         }
 
         console.log(`[SeratoSync] Deck ${data.deck}: ${data.playing ? 'PLAY' : 'PAUSE'}`);
@@ -155,6 +168,13 @@ export class SeratoSync {
       }
       this.onActiveDeckSwitch?.(deck, info);
     }
+  }
+
+  _findOtherPlayingDeck(excludeDeck) {
+    for (const [deck, info] of this.decks) {
+      if (deck !== excludeDeck && info.playing) return deck;
+    }
+    return null;
   }
 
   _findPlayingDeck() {
