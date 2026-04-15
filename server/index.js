@@ -51,12 +51,25 @@ for (const dir of MUSIC_DIRS) {
   app.use('/music-covers', express.static(dir));
 }
 
-// Serve any cover file by base64url-encoded path
-app.get('/cover-file', (req, res) => {
-  try {
-    const filePath = Buffer.from(req.query.p, 'base64url').toString();
+// Serve cover files by numeric ID
+const coverRegistry = new Map(); // id -> absolute path
+let coverIdCounter = 0;
+
+function registerCover(filePath) {
+  // Check if already registered
+  for (const [id, path] of coverRegistry) {
+    if (path === filePath) return id;
+  }
+  const id = ++coverIdCounter;
+  coverRegistry.set(id, filePath);
+  return id;
+}
+
+app.get('/cover/:id', (req, res) => {
+  const filePath = coverRegistry.get(Number(req.params.id));
+  if (filePath) {
     res.sendFile(filePath);
-  } catch {
+  } else {
     res.status(404).send('not found');
   }
 });
@@ -224,8 +237,8 @@ async function sendTrackInfo(ws, deck, info) {
   }
   if (coverPath) {
     // Use hash-based URL to avoid path/encoding issues
-    const coverHash = Buffer.from(coverPath).toString('base64url');
-    const coverUrl = `http://localhost:${PORT}/cover-file?p=${coverHash}`;
+    const coverId = registerCover(coverPath);
+    const coverUrl = `http://localhost:${PORT}/cover/${coverId}`;
     console.log(`[Cover] Sending: ${coverPath.split('/').pop()}`);
     sendFn({
       type: 'cover',
