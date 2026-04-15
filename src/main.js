@@ -327,8 +327,10 @@ document.getElementById('folder-btn')?.addEventListener('click', () => {
         body: formData,
       });
       const data = await res.json();
-      statusEl.textContent = `✓ ${data.count} tracks loaded from ${folderName} — click Start`;
+      statusEl.textContent = `✓ ${data.count} tracks loaded — reloading...`;
       statusEl.style.color = '#3a86ff';
+      // Reload page so all state is clean with the new folder
+      setTimeout(() => location.reload(), 1000);
     } catch (err) {
       statusEl.textContent = `Error: ${err.message}`;
     }
