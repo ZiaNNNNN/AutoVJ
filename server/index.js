@@ -9,6 +9,7 @@ import { SeratoWatcher } from './seratoWatcher.js';
 import { LrcIndex } from './lrcIndex.js';
 import { CoverFetcher } from './coverFetcher.js';
 import { SongAnalyzer } from './songAnalyzer.js';
+import { MidiListener } from './midiListener.js';
 
 const PORT = 3456;
 
@@ -200,6 +201,12 @@ serato.onTrackRemove = (deck) => {
   broadcast({ type: 'unload', deck });
 };
 
+// MIDI listener for fader positions
+const midi = new MidiListener();
+midi.onDeckSwitch = (dominantDeck) => {
+  broadcast({ type: 'deck-switch', deck: dominantDeck });
+};
+
 // Start
 server.listen(PORT, () => {
   console.log(`[Server] Running on http://localhost:${PORT}`);
@@ -209,4 +216,6 @@ server.listen(PORT, () => {
   if (!connected) {
     console.warn('[Server] Serato not detected - will retry when available');
   }
+
+  midi.start();
 });

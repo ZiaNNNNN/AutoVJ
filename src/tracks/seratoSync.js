@@ -11,6 +11,8 @@ export class SeratoSync {
     // Deck state
     this.decks = new Map();
     this.activeDeck = null;
+    this.switchDelay = 15; // seconds after play before auto-switching (adjustable with < >)
+    this._switchTimer = null;
 
     // Callbacks
     this.onTrackChange = null;      // (trackInfo) - active deck changed track
@@ -103,11 +105,22 @@ export class SeratoSync {
           existing.playing = data.playing;
         }
 
-        if (!data.playing && data.deck === this.activeDeck) {
-          // Active deck stopped → switch to other playing deck
+        if (data.playing && data.deck !== this.activeDeck) {
+          // Other deck started playing → schedule switch after delay
+          clearTimeout(this._switchTimer);
+          console.log(`[SeratoSync] Deck ${data.deck} playing, will switch in ${this.switchDelay}s`);
+          this._switchTimer = setTimeout(() => {
+            const info = this.decks.get(data.deck);
+            if (info && info.playing) {
+              this._setActiveDeck(data.deck);
+              this.onPlayStateChange?.(data.deck, true, 0);
+            }
+          }, this.switchDelay * 1000);
+        } else if (!data.playing && data.deck === this.activeDeck) {
+          // Active deck stopped → switch to other immediately
+          clearTimeout(this._switchTimer);
           const otherDeck = this._findOtherPlayingDeck(data.deck);
           if (otherDeck) {
-            console.log(`[SeratoSync] Active deck stopped → switching to deck ${otherDeck}`);
             this._setActiveDeck(otherDeck);
             this.onPlayStateChange?.(otherDeck, true, 0);
           }
@@ -136,6 +149,17 @@ export class SeratoSync {
         if (data.deck === this.activeDeck && data.analysis) {
           console.log(`[SeratoSync] Mood: ${data.analysis.mood}, ${data.analysis.keywords?.length} keywords`);
           this.onMoodReady?.(data.analysis);
+        }
+        break;
+      }
+
+      case 'deck-switch': {
+        // MIDI fader detected a new dominant deck
+        if (data.deck !== this.activeDeck && this.decks.has(data.deck)) {
+          console.log(`[SeratoSync] MIDI: deck ${data.deck} is now dominant`);
+          this._setActiveDeck(data.deck);
+          const info = this.decks.get(data.deck);
+          if (info) this.onPlayStateChange?.(data.deck, true, 0);
         }
         break;
       }

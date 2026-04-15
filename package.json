@@ -15,6 +15,7 @@
     "@anthropic-ai/sdk": "^0.88.0",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.2",
+    "easymidi": "^3.2.0",
     "express": "^5.2.1",
     "three": "^0.183.2",
     "vite": "^8.0.8",
