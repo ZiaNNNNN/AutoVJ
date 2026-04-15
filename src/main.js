@@ -184,7 +184,7 @@ function animate() {
       `L1: ${effectNames[L[1].effectId]||'?'} ${L[1].intensity.toFixed(3)}  ` +
       `L2: ${effectNames[L[2].effectId]||'?'} ${L[2].intensity.toFixed(3)}` +
       (ca.transitioning ? `  TRANSITION ${(ca.transition*100).toFixed(0)}%` : '') +
-      `\nactive: deck ${seratoSync.activeDeck || '?'}  switch[<>]: ${seratoSync.switchDelay}s`;
+      `\nactive: deck ${seratoSync.activeDeck || '?'}  (D to switch)`;
   }
 }
 
@@ -251,11 +251,11 @@ function onKeyDown(e) {
       e.preventDefault();
       analyzer.sensitivity = Math.max(0.2, analyzer.sensitivity - 0.2);
       break;
-    case 'Period': // >: switch delay up
-      seratoSync.switchDelay = Math.min(30, seratoSync.switchDelay + 5);
+    case 'Period': // >: reactivity up
+      analyzer.reactivity = Math.min(2.0, (analyzer.reactivity || 1.0) + 0.2);
       break;
-    case 'Comma': // <: switch delay down
-      seratoSync.switchDelay = Math.max(0, seratoSync.switchDelay - 5);
+    case 'Comma': // <: reactivity down
+      analyzer.reactivity = Math.max(0.2, (analyzer.reactivity || 1.0) - 0.2);
       break;
     case 'Backquote': // ` key - toggle debug HUD
       if (debugHud) {

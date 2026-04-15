@@ -11,8 +11,6 @@ export class SeratoSync {
     // Deck state
     this.decks = new Map();
     this.activeDeck = null;
-    this.switchDelay = 15; // seconds after play before auto-switching (adjustable with < >)
-    this._switchTimer = null;
 
     // Callbacks
     this.onTrackChange = null;      // (trackInfo) - active deck changed track
@@ -105,20 +103,8 @@ export class SeratoSync {
           existing.playing = data.playing;
         }
 
-        if (data.playing && data.deck !== this.activeDeck) {
-          // Other deck started playing → schedule switch after delay
-          clearTimeout(this._switchTimer);
-          console.log(`[SeratoSync] Deck ${data.deck} playing, will switch in ${this.switchDelay}s`);
-          this._switchTimer = setTimeout(() => {
-            const info = this.decks.get(data.deck);
-            if (info && info.playing) {
-              this._setActiveDeck(data.deck);
-              this.onPlayStateChange?.(data.deck, true, 0);
-            }
-          }, this.switchDelay * 1000);
-        } else if (!data.playing && data.deck === this.activeDeck) {
-          // Active deck stopped → switch to other immediately
-          clearTimeout(this._switchTimer);
+        if (!data.playing && data.deck === this.activeDeck) {
+          // Active deck stopped → switch to other playing deck
           const otherDeck = this._findOtherPlayingDeck(data.deck);
           if (otherDeck) {
             this._setActiveDeck(otherDeck);
@@ -127,6 +113,8 @@ export class SeratoSync {
         } else if (data.playing && data.deck === this.activeDeck) {
           this.onPlayStateChange?.(data.deck, true, data.estimatedPosition);
         }
+        // Note: other deck starting play does NOT auto-switch.
+        // Use D key to manually switch, or wait for issue #1 (volume-based switching).
 
         console.log(`[SeratoSync] Deck ${data.deck}: ${data.playing ? 'PLAY' : 'PAUSE'}`);
         break;
