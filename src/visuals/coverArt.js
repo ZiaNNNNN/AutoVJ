@@ -341,14 +341,14 @@ void main() {
   if (uTransition > 0.01 && uTransition < 0.99 && uHasPrevTexture > 0.5) {
     float t = uTransition; // 0→1 over ~4 seconds
 
-    // Sample previous cover (with its own distortion for visual interest)
+    // Sample previous cover (gentle zoom out)
     vec2 prevUv = fitCover(vUv);
-    // Reverse-drift the old cover (zooming out as it fades)
-    prevUv = (prevUv - 0.5) * (1.0 + t * 0.3) + 0.5;
+    prevUv = (prevUv - 0.5) * (1.0 + t * 0.1) + 0.5; // slow zoom
     vec3 prevColor = sampleWithBleed(prevUv, vUv);
 
-    // Crossfade blend curve (S-curve for smooth transition)
-    float blend = t * t * (3.0 - 2.0 * t); // smoothstep
+    // Blend curve: old cover stays visible longer, new one comes in late
+    // At t=0.5, blend is only ~0.25 (old still dominant)
+    float blend = pow(t, 1.6); // skewed toward late transition
 
     // Beat-reactive transition effects
     float beatPunch = uBeat * (1.0 - abs(t - 0.5) * 2.0); // strongest in the middle
