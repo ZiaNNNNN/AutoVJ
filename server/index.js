@@ -12,7 +12,8 @@ import { SongAnalyzer } from './songAnalyzer.js';
 
 const PORT = 3456;
 const MUSIC_DIRS = [
-  join(homedir(), 'Music/网易云音乐'),
+  join(homedir(), 'Desktop/dj/lyrics_and_covers'),
+  join(homedir(), 'Music/网易云音乐'),  // fallback
 ];
 
 // Initialize components
