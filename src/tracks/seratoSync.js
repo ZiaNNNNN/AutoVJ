@@ -103,18 +103,14 @@ export class SeratoSync {
           existing.playing = data.playing;
         }
 
-        if (!data.playing && data.deck === this.activeDeck) {
-          // Active deck stopped → switch to other playing deck
-          const otherDeck = this._findOtherPlayingDeck(data.deck);
-          if (otherDeck) {
-            this._setActiveDeck(otherDeck);
-            this.onPlayStateChange?.(otherDeck, true, 0);
-          }
-        } else if (data.playing && data.deck === this.activeDeck) {
+        // Switch to whichever deck just started playing
+        // This triggers on played 0→1 transition (pressing Play, not Cue)
+        if (data.playing) {
+          this._setActiveDeck(data.deck);
           this.onPlayStateChange?.(data.deck, true, data.estimatedPosition);
+        } else {
+          this.onPlayStateChange?.(data.deck, false, 0);
         }
-        // Note: other deck starting play does NOT auto-switch.
-        // Use D key to manually switch, or wait for issue #1 (volume-based switching).
 
         console.log(`[SeratoSync] Deck ${data.deck}: ${data.playing ? 'PLAY' : 'PAUSE'}`);
         break;
