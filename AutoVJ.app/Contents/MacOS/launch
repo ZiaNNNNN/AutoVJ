@@ -1,26 +1,36 @@
 #!/bin/bash
-# AutoVJ Launcher - starts backend and opens browser
+# AutoVJ Launcher - builds if needed, starts backend, opens browser
 
 # Find the project directory (relative to .app location)
 APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 # Find Node.js
-if command -v node &>/dev/null; then
-  NODE="node"
-elif [ -f "/usr/local/Cellar/node@22/22.22.2_1/bin/node" ]; then
+NPX=""
+if [ -f "/usr/local/Cellar/node@22/22.22.2_1/bin/node" ]; then
   NODE="/usr/local/Cellar/node@22/22.22.2_1/bin/node"
+  NPX="/usr/local/Cellar/node@22/22.22.2_1/bin/npx"
 elif [ -f "/opt/homebrew/bin/node" ]; then
   NODE="/opt/homebrew/bin/node"
+  NPX="/opt/homebrew/bin/npx"
+elif command -v node &>/dev/null; then
+  NODE="node"
+  NPX="npx"
 else
   osascript -e 'display alert "AutoVJ" message "Node.js not found. Install with: brew install node@22" as critical'
   exit 1
+fi
+
+cd "$APP_DIR"
+
+# Auto-build if dist/ is missing or source changed
+if [ ! -f "dist/index.html" ] || [ "src/main.js" -nt "dist/index.html" ] || [ "src/visuals/coverArt.js" -nt "dist/index.html" ]; then
+  "$NPX" vite build --logLevel error 2>/dev/null
 fi
 
 # Kill any existing instance
 lsof -ti :3456 2>/dev/null | xargs kill -9 2>/dev/null
 
 # Start the server
-cd "$APP_DIR"
 "$NODE" server/index.js &
 SERVER_PID=$!
 
