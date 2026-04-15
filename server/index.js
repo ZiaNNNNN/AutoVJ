@@ -1,10 +1,10 @@
 import 'dotenv/config';
 import express from 'express';
 import { WebSocketServer } from 'ws';
-import multer from 'multer';
 import { createServer } from 'http';
 import { join } from 'path';
 import { homedir } from 'os';
+import { existsSync } from 'fs';
 import { SeratoWatcher } from './seratoWatcher.js';
 import { LrcIndex } from './lrcIndex.js';
 import { CoverFetcher } from './coverFetcher.js';
@@ -12,48 +12,12 @@ import { SongAnalyzer } from './songAnalyzer.js';
 
 const PORT = 3456;
 
-// Auto-detect music folders: local dirs + any external drive with .lrc files
-import { existsSync, readdirSync as readdir, statSync } from 'fs';
+// Default music folders (add more paths here if needed)
+const MUSIC_DIRS = [
+  join(homedir(), 'Desktop/dj/lyrics_and_covers'),
+  join(homedir(), 'Music/网易云音乐'),
+].filter(d => existsSync(d));
 
-function detectMusicDirs() {
-  const dirs = [
-    join(homedir(), 'Desktop/dj/lyrics_and_covers'),
-    join(homedir(), 'Music/网易云音乐'),
-  ];
-
-  // Scan /Volumes/ for external drives
-  try {
-    for (const vol of readdir('/Volumes')) {
-      if (vol === 'Macintosh HD') continue; // skip system drive
-      const volPath = `/Volumes/${vol}`;
-      try {
-        // Check common folder names for lyrics/covers
-        const candidates = [
-          join(volPath, 'lyrics_and_covers'),
-          join(volPath, 'DJ', 'lyrics_and_covers'),
-          join(volPath, 'dj', 'lyrics_and_covers'),
-          join(volPath, 'Music', 'lyrics_and_covers'),
-          volPath, // root of drive
-        ];
-        for (const candidate of candidates) {
-          if (existsSync(candidate) && statSync(candidate).isDirectory()) {
-            // Check if it has any .lrc files
-            const files = readdir(candidate);
-            if (files.some(f => f.endsWith('.lrc'))) {
-              dirs.push(candidate);
-              console.log(`[AutoDetect] Found music folder: ${candidate}`);
-              break;
-            }
-          }
-        }
-      } catch {}
-    }
-  } catch {}
-
-  return dirs.filter(d => { try { return existsSync(d); } catch { return false; } });
-}
-
-const MUSIC_DIRS = detectMusicDirs();
 console.log(`[Config] Music folders: ${MUSIC_DIRS.join(', ')}`);
 
 // Initialize components
@@ -66,10 +30,7 @@ const songAnalyzer = new SongAnalyzer();
 lrcIndex.scan();
 await coverFetcher.scanLocalCovers();
 
-// Track added dirs for persistence
-const addedDirs = [];
-
-// Express app for serving cover images
+// Express app
 const app = express();
 
 // CORS for frontend dev server
@@ -83,20 +44,14 @@ for (const dir of MUSIC_DIRS) {
   app.use('/meta', express.static(join(dir, 'meta')));
 }
 
-// Serve cached cover images
+// Serve cached cover images (iTunes downloads)
 app.use('/covers', express.static(join(import.meta.dirname, '.cache', 'covers')));
 
-// Serve same-name covers from music directories
-for (const dir of MUSIC_DIRS) {
-  app.use('/music-covers', express.static(dir));
-}
-
-// Serve cover files by numeric ID
-const coverRegistry = new Map(); // id -> absolute path
+// Serve cover files by numeric ID (handles all path/encoding edge cases)
+const coverRegistry = new Map();
 let coverIdCounter = 0;
 
 function registerCover(filePath) {
-  // Check if already registered
   for (const [id, path] of coverRegistry) {
     if (path === filePath) return id;
   }
@@ -125,7 +80,6 @@ app.get('/api/state', (req, res) => {
 // API: rescan LRC files + re-broadcast current decks
 app.post('/api/rescan', async (req, res) => {
   const count = lrcIndex.scan();
-  // Re-broadcast deck info so covers reload
   const decks = serato.getCurrentDecks();
   for (const [deck, info] of Object.entries(decks)) {
     sendTrackInfo(null, deck, info);
@@ -133,71 +87,9 @@ app.post('/api/rescan', async (req, res) => {
   res.json({ count });
 });
 
-// API: add a music folder
-app.post('/api/add-folder', express.json(), async (req, res) => {
-  const { path: folderPath } = req.body;
-  if (!folderPath) return res.status(400).json({ error: 'path required' });
-
-  // Add to scan dirs
-  lrcIndex.musicDirs.push(folderPath);
-  coverFetcher.musicDirs.push(folderPath);
-  addedDirs.push(folderPath);
-
-  // Serve covers from this dir
-  app.use('/music-covers', express.static(folderPath));
-
-  // Rescan
-  const lrcCount = lrcIndex.scan();
-  await coverFetcher.scanLocalCovers();
-
-  console.log(`[Server] Added music folder: ${folderPath} (${lrcCount} lyrics total)`);
-  res.json({ count: lrcCount, folder: folderPath });
-});
-
 // API: list current folders
 app.get('/api/folders', (req, res) => {
   res.json({ folders: [...lrcIndex.musicDirs] });
-});
-
-// API: upload music folder from browser file picker
-import { mkdirSync, writeFileSync } from 'fs';
-const UPLOAD_DIR = join(import.meta.dirname, '.cache', 'uploads');
-mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const upload = multer();
-app.post('/api/upload-folder', upload.array('files'), async (req, res) => {
-  if (!req.files || !req.files.length) {
-    return res.status(400).json({ error: 'no files' });
-  }
-
-  // Save uploaded files, preserving subfolder structure
-  const folderName = req.files[0].originalname.split('/')[0] || 'uploaded';
-  const destDir = join(UPLOAD_DIR, folderName);
-  mkdirSync(destDir, { recursive: true });
-
-  for (const file of req.files) {
-    // originalname includes relative path like "FolderName/Artist - Song.lrc"
-    const fileName = file.originalname.split('/').pop();
-    writeFileSync(join(destDir, fileName), file.buffer);
-  }
-
-  // Add to music dirs and rescan
-  lrcIndex.musicDirs.push(destDir);
-  coverFetcher.musicDirs.push(destDir);
-  app.use('/music-covers', express.static(destDir));
-
-  const lrcCount = lrcIndex.scan();
-  await coverFetcher.scanLocalCovers();
-
-  console.log(`[Server] Uploaded folder: ${folderName} → ${destDir} (${lrcCount} lyrics total)`);
-
-  // Re-send current deck info to all clients (now with covers from the new folder)
-  const decks = serato.getCurrentDecks();
-  for (const [deck, info] of Object.entries(decks)) {
-    sendTrackInfo(null, deck, info);
-  }
-
-  res.json({ count: lrcCount, folder: folderName });
 });
 
 const server = createServer(app);
@@ -225,9 +117,7 @@ wss.on('connection', (ws) => {
 function broadcast(data) {
   const msg = JSON.stringify(data);
   for (const ws of clients) {
-    if (ws.readyState === 1) { // OPEN
-      ws.send(msg);
-    }
+    if (ws.readyState === 1) ws.send(msg);
   }
 }
 
@@ -238,10 +128,7 @@ async function sendTrackInfo(ws, deck, info) {
   // Find lyrics
   const lrcContent = lrcIndex.findLyrics(trackName);
 
-  // Fetch cover (async, will send update when ready)
-  const searchTerms = [artist, trackName].filter(Boolean).join(' - ');
   // Parse artist from track name if not in artist field
-  // Serato often stores "Artist - Title" in the name field
   let searchArtist = artist;
   let searchTitle = trackName;
   const dashSplit = trackName.split(/\s*-\s*/);
@@ -263,44 +150,32 @@ async function sendTrackInfo(ws, deck, info) {
     coverUrl: null,
   };
 
-  // Send immediately with lyrics (cover will follow)
   const sendFn = ws ? (data) => {
     if (ws.readyState === 1) ws.send(JSON.stringify(data));
   } : broadcast;
 
   sendFn(msg);
 
-  // Fetch cover: 1) same-name file → 2) NetEase local → 3) iTunes API
+  // Fetch cover: same-name file → NetEase local → iTunes API
   let coverPath = lrcIndex.findCover(trackName);
   if (!coverPath) {
     coverPath = await coverFetcher.fetchCover(searchArtist, searchTitle);
   }
   if (coverPath) {
-    // Use hash-based URL to avoid path/encoding issues
     const coverId = registerCover(coverPath);
     const coverUrl = `http://localhost:${PORT}/cover/${coverId}`;
     console.log(`[Cover] Sending: ${coverPath.split('/').pop()}`);
-    sendFn({
-      type: 'cover',
-      deck,
-      name: trackName,
-      coverUrl,
-    });
+    sendFn({ type: 'cover', deck, name: trackName, coverUrl });
   }
 
-  // AI mood analysis in background
+  // AI mood analysis
   if (lrcContent) {
     const analysis = await songAnalyzer.analyze(trackName, lrcContent);
-    sendFn({
-      type: 'mood',
-      deck,
-      name: trackName,
-      analysis,
-    });
+    sendFn({ type: 'mood', deck, name: trackName, analysis });
   }
 }
 
-// Handle Serato track changes
+// Handle Serato events
 serato.onTrackChange = (deck, info) => {
   sendTrackInfo(null, deck, info);
 };
@@ -310,7 +185,6 @@ serato.onPlayStateChange = (deck, playing) => {
     type: 'playstate',
     deck,
     playing,
-    // Send estimated position: now - start_time
     estimatedPosition: playing ? (Date.now() / 1000 - serato.currentDecks.get(deck)?.startTime || 0) : 0,
   });
 };
@@ -319,7 +193,7 @@ serato.onTrackRemove = (deck) => {
   broadcast({ type: 'unload', deck });
 };
 
-// Start everything
+// Start
 server.listen(PORT, () => {
   console.log(`[Server] Running on http://localhost:${PORT}`);
   console.log(`[Server] WebSocket on ws://localhost:${PORT}`);

@@ -58,13 +58,13 @@ Without an API key, AutoVJ still works - all songs use a default visual atmosphe
 ./start.sh
 ```
 
-Open `http://localhost:5173` in Chrome, click **Start**, and begin DJing.
+Open `http://localhost:5173` in Chrome and begin DJing.
 
 ## Music Library Setup
 
 ### Folder Structure
 
-AutoVJ matches songs by **filename**. Your lyrics (`.lrc`) and cover art (`.jpg`/`.png`) go in one folder. MP3 files can be anywhere - Serato tells AutoVJ what's playing, AutoVJ finds the matching lyrics and cover by name.
+AutoVJ matches songs by **filename**. Your lyrics (`.lrc`) and cover art (`.jpg`/`.png`) go in one folder. MP3 files can be anywhere — Serato tells AutoVJ what's playing, AutoVJ finds the matching lyrics and cover by name.
 
 ```
 ~/Desktop/dj/
@@ -82,23 +82,30 @@ AutoVJ matches songs by **filename**. Your lyrics (`.lrc`) and cover art (`.jpg`
 
 **Rule**: `.lrc` and `.jpg` files must have the **same name** as the MP3 (minus extension).
 
-### Adding Your Folder
+### Two ways to load your library
 
-**Option A** (recommended): Click **"Add Lyrics & Covers Folder"** on the start screen. Select your folder. Done.
+**Option A: Pre-configured folder** (recommended for your own machine)
 
-**Option B**: If using NetEase Cloud Music with `meta/track-{ID}.jpg` covers, run the organizer script to rename them:
+Add your folder path to `MUSIC_DIRS` in `server/index.js`. The server scans it automatically on startup. Click **Start** and go.
+
+**Option B: Folder picker** (for external drives, other machines)
+
+Click **"Add Lyrics & Covers"** on the start screen → select your folder → files are loaded directly in the browser → click **Start**. No server restart needed.
+
+### NetEase Cloud Music users
+
+If your covers are in `meta/track-{ID}.jpg` format, run the organizer script to rename them to match song names:
 
 ```bash
 node scripts/organize-library.js ~/path/to/your/music/folder
 ```
 
-This resolves track IDs via the NetEase API and copies covers with the correct song names.
-
 ### Cover Art Matching Priority
 
-1. **Same-name file** - `Song.jpg` alongside `Song.lrc` (fastest, most reliable)
-2. **NetEase local** - `meta/track-{ID}.jpg` resolved via API
-3. **iTunes Search** - Auto-downloads from iTunes and caches locally
+1. **Browser local** — loaded via folder picker (blob URLs, instant)
+2. **Same-name file** — `Song.jpg` alongside `Song.lrc` on server
+3. **NetEase local** — `meta/track-{ID}.jpg` resolved via API
+4. **iTunes Search** — auto-downloads from iTunes and caches locally
 
 ## Audio Setup
 
