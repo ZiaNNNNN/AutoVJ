@@ -41,6 +41,11 @@ for (const dir of MUSIC_DIRS) {
 // Serve cached cover images
 app.use('/covers', express.static(join(import.meta.dirname, '.cache', 'covers')));
 
+// Serve same-name covers from music directories
+for (const dir of MUSIC_DIRS) {
+  app.use('/music-covers', express.static(dir));
+}
+
 // API: get current state
 app.get('/api/state', (req, res) => {
   res.json({
@@ -125,17 +130,22 @@ async function sendTrackInfo(ws, deck, info) {
 
   sendFn(msg);
 
-  // Fetch cover in background
-  const coverPath = await coverFetcher.fetchCover(searchArtist, searchTitle);
+  // Fetch cover: 1) same-name file → 2) NetEase local → 3) iTunes API
+  let coverPath = lrcIndex.findCover(trackName); // same-name .jpg/.png
+  if (!coverPath) {
+    coverPath = await coverFetcher.fetchCover(searchArtist, searchTitle);
+  }
   if (coverPath) {
-    // Determine URL based on whether it's a local meta/ file or cached iTunes file
     let coverUrl;
     if (coverPath.includes('/meta/')) {
       const filename = coverPath.split('/').pop();
       coverUrl = `http://localhost:${PORT}/meta/${filename}`;
-    } else {
+    } else if (coverPath.includes('.cache')) {
       const filename = coverPath.split('/').pop();
       coverUrl = `http://localhost:${PORT}/covers/${filename}`;
+    } else {
+      // Same-name cover: serve from music dir
+      coverUrl = `http://localhost:${PORT}/music-covers/${encodeURIComponent(coverPath.split('/').pop())}`;
     }
     sendFn({
       type: 'cover',

@@ -1,15 +1,16 @@
-import { readdirSync, readFileSync } from 'fs';
-import { join, extname, basename } from 'path';
+import { readdirSync, readFileSync, existsSync } from 'fs';
+import { join, extname, basename, dirname } from 'path';
+
+const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
 
 export class LrcIndex {
   constructor(musicDirs) {
     this.musicDirs = Array.isArray(musicDirs) ? musicDirs : [musicDirs];
-    this.index = new Map(); // normalized name -> { path, content }
+    this.index = new Map(); // normalized name -> { path, content, originalName, coverPath }
   }
 
   scan() {
     this.index.clear();
-    let count = 0;
 
     for (const dir of this.musicDirs) {
       try {
@@ -19,9 +20,9 @@ export class LrcIndex {
       }
     }
 
-    count = this.index.size;
-    console.log(`[LRC] Indexed ${count} lyric files`);
-    return count;
+    const withCover = [...this.index.values()].filter(v => v.coverPath).length;
+    console.log(`[LRC] Indexed ${this.index.size} lyric files (${withCover} with same-name covers)`);
+    return this.index.size;
   }
 
   _scanDir(dir) {
@@ -33,45 +34,69 @@ export class LrcIndex {
       } else if (extname(entry.name).toLowerCase() === '.lrc') {
         const name = basename(entry.name, '.lrc');
         const content = readFileSync(fullPath, 'utf-8');
-        // Store under multiple keys for fuzzy matching
-        this.index.set(this._normalize(name), { path: fullPath, content, originalName: name });
+        const dirPath = dirname(fullPath);
+
+        // Look for same-name cover image
+        let coverPath = null;
+        for (const ext of IMAGE_EXTS) {
+          const candidate = join(dirPath, name + ext);
+          if (existsSync(candidate)) {
+            coverPath = candidate;
+            break;
+          }
+        }
+
+        this.index.set(this._normalize(name), {
+          path: fullPath,
+          content,
+          originalName: name,
+          coverPath,
+        });
       }
     }
   }
 
   // Find lyrics for a track name (fuzzy match)
   findLyrics(trackName) {
+    const entry = this._findEntry(trackName);
+    return entry ? entry.content : null;
+  }
+
+  // Find same-name cover for a track name
+  findCover(trackName) {
+    const entry = this._findEntry(trackName);
+    return entry ? entry.coverPath : null;
+  }
+
+  _findEntry(trackName) {
     if (!trackName) return null;
 
     const normalized = this._normalize(trackName);
 
     // Exact match
     if (this.index.has(normalized)) {
-      return this.index.get(normalized).content;
+      return this.index.get(normalized);
     }
 
-    // Try matching by contained substring
+    // Substring match
     for (const [key, value] of this.index) {
       if (normalized.includes(key) || key.includes(normalized)) {
-        return value.content;
+        return value;
       }
     }
 
-    // Try matching individual parts (artist - title format)
-    // Serato stores as "Artist1,Artist2 - Title"
+    // Artist - Title split match
     const parts = trackName.split(/\s*-\s*/);
     if (parts.length >= 2) {
       const title = this._normalize(parts.slice(1).join('-'));
       const artist = this._normalize(parts[0]);
 
       for (const [key, value] of this.index) {
-        // Match by title part
         if (key.includes(title) || title.includes(key)) {
-          return value.content;
+          return value;
         }
-        // Match by artist + title
         if (key.includes(artist) && key.includes(title)) {
-          return value.content;
+          return value;
         }
       }
     }
