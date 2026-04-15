@@ -52,9 +52,9 @@ for (const dir of MUSIC_DIRS) {
 }
 
 // Serve any cover file by base64url-encoded path
-app.get('/cover-file/:hash', (req, res) => {
+app.get('/cover-file', (req, res) => {
   try {
-    const filePath = Buffer.from(req.params.hash, 'base64url').toString();
+    const filePath = Buffer.from(req.query.p, 'base64url').toString();
     res.sendFile(filePath);
   } catch {
     res.status(404).send('not found');
@@ -225,7 +225,7 @@ async function sendTrackInfo(ws, deck, info) {
   if (coverPath) {
     // Use hash-based URL to avoid path/encoding issues
     const coverHash = Buffer.from(coverPath).toString('base64url');
-    const coverUrl = `http://localhost:${PORT}/cover-file/${coverHash}`;
+    const coverUrl = `http://localhost:${PORT}/cover-file?p=${coverHash}`;
     console.log(`[Cover] Sending: ${coverPath.split('/').pop()}`);
     sendFn({
       type: 'cover',
