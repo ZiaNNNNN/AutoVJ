@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import { WebSocketServer } from 'ws';
+import multer from 'multer';
 import { createServer } from 'http';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -10,10 +11,8 @@ import { CoverFetcher } from './coverFetcher.js';
 import { SongAnalyzer } from './songAnalyzer.js';
 
 const PORT = 3456;
-// Add your music folders here. External drives mount at /Volumes/DriveName/
 const MUSIC_DIRS = [
   join(homedir(), 'Music/网易云音乐'),
-  // '/Volumes/你的硬盘名/Library',  ← uncomment and rename
 ];
 
 // Initialize components
@@ -25,6 +24,9 @@ const songAnalyzer = new SongAnalyzer();
 // Scan LRC files and local covers
 lrcIndex.scan();
 await coverFetcher.scanLocalCovers();
+
+// Track added dirs for persistence
+const addedDirs = [];
 
 // Express app for serving cover images
 const app = express();
@@ -60,6 +62,66 @@ app.get('/api/state', (req, res) => {
 app.post('/api/rescan', (req, res) => {
   const count = lrcIndex.scan();
   res.json({ count });
+});
+
+// API: add a music folder
+app.post('/api/add-folder', express.json(), async (req, res) => {
+  const { path: folderPath } = req.body;
+  if (!folderPath) return res.status(400).json({ error: 'path required' });
+
+  // Add to scan dirs
+  lrcIndex.musicDirs.push(folderPath);
+  coverFetcher.musicDirs.push(folderPath);
+  addedDirs.push(folderPath);
+
+  // Serve covers from this dir
+  app.use('/music-covers', express.static(folderPath));
+
+  // Rescan
+  const lrcCount = lrcIndex.scan();
+  await coverFetcher.scanLocalCovers();
+
+  console.log(`[Server] Added music folder: ${folderPath} (${lrcCount} lyrics total)`);
+  res.json({ count: lrcCount, folder: folderPath });
+});
+
+// API: list current folders
+app.get('/api/folders', (req, res) => {
+  res.json({ folders: [...lrcIndex.musicDirs] });
+});
+
+// API: upload music folder from browser file picker
+import { mkdirSync, writeFileSync } from 'fs';
+const UPLOAD_DIR = join(import.meta.dirname, '.cache', 'uploads');
+mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const upload = multer();
+app.post('/api/upload-folder', upload.array('files'), async (req, res) => {
+  if (!req.files || !req.files.length) {
+    return res.status(400).json({ error: 'no files' });
+  }
+
+  // Save uploaded files, preserving subfolder structure
+  const folderName = req.files[0].originalname.split('/')[0] || 'uploaded';
+  const destDir = join(UPLOAD_DIR, folderName);
+  mkdirSync(destDir, { recursive: true });
+
+  for (const file of req.files) {
+    // originalname includes relative path like "FolderName/Artist - Song.lrc"
+    const fileName = file.originalname.split('/').pop();
+    writeFileSync(join(destDir, fileName), file.buffer);
+  }
+
+  // Add to music dirs and rescan
+  lrcIndex.musicDirs.push(destDir);
+  coverFetcher.musicDirs.push(destDir);
+  app.use('/music-covers', express.static(destDir));
+
+  const lrcCount = lrcIndex.scan();
+  await coverFetcher.scanLocalCovers();
+
+  console.log(`[Server] Uploaded folder: ${folderName} → ${destDir} (${lrcCount} lyrics total)`);
+  res.json({ count: lrcCount, folder: folderName });
 });
 
 const server = createServer(app);

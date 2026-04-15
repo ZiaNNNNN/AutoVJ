@@ -279,3 +279,43 @@ function onResize() {
 }
 
 document.getElementById('start-btn').addEventListener('click', init);
+
+// Folder picker: uses webkitdirectory to get the folder path
+document.getElementById('folder-btn').addEventListener('click', async () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.webkitdirectory = true;
+  input.addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (!files.length) return;
+
+    // Extract the folder path from the first file's webkitRelativePath
+    const firstPath = files[0].webkitRelativePath;
+    const folderName = firstPath.split('/')[0];
+
+    const statusEl = document.getElementById('folder-status');
+    statusEl.textContent = `Scanning ${folderName}...`;
+
+    try {
+      // Send the folder path to the backend
+      // The backend needs the absolute path, but the browser only gives relative paths.
+      // We'll send the files directly to the backend to process.
+      const formData = new FormData();
+      for (const file of files) {
+        if (/\.(lrc|jpg|jpeg|png|webp)$/i.test(file.name)) {
+          formData.append('files', file, file.webkitRelativePath);
+        }
+      }
+
+      const res = await fetch('http://localhost:3456/api/upload-folder', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      statusEl.textContent = `Loaded ${data.count} tracks from ${folderName}`;
+    } catch (err) {
+      statusEl.textContent = `Error: ${err.message}`;
+    }
+  });
+  input.click();
+});

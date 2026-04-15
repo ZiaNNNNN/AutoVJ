@@ -22,13 +22,22 @@
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
     #start-screen p { font-size: 14px; color: #666; margin-bottom: 40px; letter-spacing: 2px; }
-    #start-btn {
+    #start-btn, #folder-btn {
       padding: 16px 48px; font-size: 16px; letter-spacing: 4px;
       background: transparent; color: #fff; border: 1px solid #333;
       cursor: pointer; transition: all 0.3s;
       font-family: inherit; text-transform: uppercase;
     }
     #start-btn:hover { border-color: #ff006e; color: #ff006e; }
+    #folder-btn {
+      margin-top: 16px; font-size: 12px; padding: 10px 32px;
+      color: #666; letter-spacing: 2px;
+    }
+    #folder-btn:hover { border-color: #3a86ff; color: #3a86ff; }
+    #folder-status {
+      margin-top: 12px; font-size: 11px; color: #555;
+      letter-spacing: 1px; min-height: 16px;
+    }
     #start-screen .hint {
       position: absolute; bottom: 30px;
       font-size: 11px; color: #444; letter-spacing: 1px;
@@ -40,6 +49,8 @@
     <h1>AutoVJ</h1>
     <p>AUDIO-REACTIVE VISUAL ENGINE</p>
     <button id="start-btn">Start</button>
+    <button id="folder-btn">Add Music Folder</button>
+    <div id="folder-status"></div>
     <div class="hint">1: Cover Art &bull; 2: Word Cloud &bull; F: fullscreen &bull; `: debug</div>
   </div>
   <script type="module" src="/src/main.js"></script>
