@@ -2,9 +2,9 @@
 
 Real-time audio-reactive visual engine for DJs. Automatically syncs with Serato DJ Pro, displays album artwork with beat-driven shader effects, and uses AI to create unique visual atmospheres for each song.
 
-> **To add your own demo screenshot**: Take a screenshot while DJing with AutoVJ running, save it as `docs/demo.png`, and push.
+![AutoVJ Demo](docs/demo.gif)
 
-![AutoVJ Cover Art Mode](docs/demo.png)
+> **Record your own demo**: Start DJing with AutoVJ, then run `./scripts/record-demo.sh` (requires ffmpeg: `brew install ffmpeg`)
 
 ## What It Does
 
