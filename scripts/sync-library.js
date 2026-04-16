@@ -141,7 +141,7 @@ for (const srcDir of sourceDirs) {
 
     if (trackIds.length > 0) {
       console.log(`Downloading ${needCover.length} covers from NetEase API...`);
-      const normalize = s => s.toLowerCase().replace(/\s+/g, '').replace(/[()（）【】\[\],，、.]/g, '');
+      const normalize = s => s.toLowerCase().replace(/\s+/g, '').replace(/[()（）【】\[\],，、.:;：；!！?？\-_~～]/g, '');
 
       // Batch API call (max ~100 IDs per request)
       for (let i = 0; i < trackIds.length; i += 100) {
@@ -185,6 +185,39 @@ for (const srcDir of sourceDirs) {
           console.log(`  API error: ${err.message}`);
         }
       }
+    }
+  }
+
+  // Step 2b: For songs still missing covers, search by name → get detail → download
+  if (needCover.length > 0) {
+    console.log(`Searching ${needCover.length} remaining covers by name...`);
+    for (const songName of [...needCover]) {
+      try {
+        // Search for song ID
+        const searchUrl = `https://music.163.com/api/search/get?s=${encodeURIComponent(songName)}&type=1&limit=1`;
+        const searchRes = await fetch(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const searchData = await searchRes.json();
+        const songId = searchData.result?.songs?.[0]?.id;
+        if (!songId) continue;
+
+        // Get song detail with album art
+        const detailUrl = `https://music.163.com/api/song/detail?ids=[${songId}]`;
+        const detailRes = await fetch(detailUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const detailData = await detailRes.json();
+        const artUrl = detailData.songs?.[0]?.album?.picUrl;
+        if (!artUrl) continue;
+
+        // Download cover
+        const dest = join(srcDir, songName + '.jpg');
+        const imgRes = await fetch(artUrl);
+        const buf = Buffer.from(await imgRes.arrayBuffer());
+        writeFileSync(dest, buf);
+        totalCovers++;
+        needCover.splice(needCover.indexOf(songName), 1);
+        console.log(`  ✓ ${songName}`);
+
+        await new Promise(r => setTimeout(r, 300));
+      } catch {}
     }
   }
 

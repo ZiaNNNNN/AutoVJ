@@ -192,7 +192,7 @@ export class CoverFetcher {
       .toLowerCase()
       .replace(/\s+/g, '')
       .replace(/[()（）【】\[\]]/g, '')
-      .replace(/[,，、.]/g, '')
+      .replace(/[,，、.:;：；!！?？\-_~～]/g, '')
       .trim();
   }
 }

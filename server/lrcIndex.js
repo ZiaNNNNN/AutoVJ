@@ -46,7 +46,12 @@ export class LrcIndex {
           }
         }
 
-        this.index.set(this._normalize(name), {
+        const key = this._normalize(name);
+        const existing = this.index.get(key);
+        // If existing entry has a cover and new one doesn't, keep existing
+        if (existing && existing.coverPath && !coverPath) continue;
+
+        this.index.set(key, {
           path: fullPath,
           content,
           originalName: name,
@@ -109,7 +114,7 @@ export class LrcIndex {
       .toLowerCase()
       .replace(/\s+/g, '')
       .replace(/[()（）【】\[\]]/g, '')
-      .replace(/[,，、]/g, '')
+      .replace(/[,，、.:;：；!！?？\-_~～]/g, '')
       .trim();
   }
 }
