@@ -17,6 +17,9 @@ if [ ! -d "dist" ] || [ "src/main.js" -nt "dist/index.html" ]; then
   npx vite build --logLevel error
 fi
 
+# Sync NetEase library (rename covers to match song names)
+node scripts/organize-library.js 2>/dev/null
+
 # Kill any existing instance
 lsof -ti :3456 2>/dev/null | xargs kill -9 2>/dev/null
 

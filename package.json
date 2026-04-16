@@ -8,6 +8,7 @@
     "dev": "PATH=/usr/local/Cellar/node@22/22.22.2_1/bin:$PATH vite --host",
     "server": "PATH=/usr/local/Cellar/node@22/22.22.2_1/bin:$PATH node server/index.js",
     "analyze": "PATH=/usr/local/Cellar/node@22/22.22.2_1/bin:$PATH node server/preanalyze.js",
+    "sync": "PATH=/usr/local/Cellar/node@22/22.22.2_1/bin:$PATH node scripts/organize-library.js",
     "build": "vite build",
     "preview": "vite preview"
   },

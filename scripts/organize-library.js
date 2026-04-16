@@ -103,10 +103,27 @@ try {
 
   console.log(`\nCopied ${copied} covers.`);
   if (needCover.length > 0) {
-    console.log(`\n${needCover.length} songs still missing covers:`);
-    needCover.forEach(n => console.log(`  - ${n}`));
-  } else {
-    console.log('All songs now have same-name covers!');
+    console.log(`${needCover.length} songs still missing covers.`);
+  }
+
+  // Step 4: Sync .lrc and .jpg to DJ lyrics_and_covers folder
+  const djDir = join(homedir(), 'Desktop/dj/lyrics_and_covers');
+  if (existsSync(join(homedir(), 'Desktop/dj'))) {
+    mkdirSync(djDir, { recursive: true });
+    let synced = 0;
+    for (const file of readdirSync(musicDir)) {
+      if (extname(file).toLowerCase() === '.lrc' || extname(file).toLowerCase() === '.jpg') {
+        const src = join(musicDir, file);
+        const dest = join(djDir, file);
+        if (!existsSync(dest)) {
+          copyFileSync(src, dest);
+          synced++;
+        }
+      }
+    }
+    if (synced > 0) {
+      console.log(`Synced ${synced} files to ${djDir}`);
+    }
   }
 } catch (err) {
   console.error('Error:', err.message);
