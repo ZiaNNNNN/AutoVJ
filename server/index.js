@@ -85,6 +85,25 @@ app.get('/api/state', (req, res) => {
   });
 });
 
+// API: sync library (convert ncm, rename covers, copy files)
+import { execSync as exec } from 'child_process';
+app.post('/api/sync-library', async (req, res) => {
+  try {
+    const nodePath = process.execPath;
+    const scriptPath = join(import.meta.dirname, '..', 'scripts', 'sync-library.js');
+    const output = exec(`"${nodePath}" "${scriptPath}"`, {
+      timeout: 120000,
+      encoding: 'utf-8',
+    });
+    // Rescan after sync
+    lrcIndex.scan();
+    await coverFetcher.scanLocalCovers();
+    res.json({ success: true, output });
+  } catch (err) {
+    res.json({ success: false, error: err.message, output: err.stdout || '' });
+  }
+});
+
 // API: rescan LRC files + re-broadcast current decks
 app.post('/api/rescan', async (req, res) => {
   const count = lrcIndex.scan();

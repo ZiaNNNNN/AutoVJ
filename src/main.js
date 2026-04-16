@@ -307,6 +307,31 @@ function findLocalCover(trackName) {
 
 document.getElementById('start-btn').addEventListener('click', init);
 
+// Sync library button: convert .ncm, rename covers, copy to DJ folder
+document.getElementById('sync-btn')?.addEventListener('click', async () => {
+  const statusEl = document.getElementById('folder-status');
+  statusEl.textContent = 'Syncing library (converting .ncm, matching covers)...';
+  statusEl.style.color = '#888';
+
+  try {
+    const res = await fetch('http://localhost:3456/api/sync-library', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      // Extract summary from output
+      const lines = data.output.split('\n');
+      const summary = lines.filter(l => l.includes('Converted') || l.includes('Covers') || l.includes('synced') || l.includes('up to date')).join(' | ');
+      statusEl.textContent = '✓ ' + (summary || 'Library synced!');
+      statusEl.style.color = '#3a86ff';
+    } else {
+      statusEl.textContent = 'Sync error: ' + (data.error || 'unknown');
+      statusEl.style.color = '#ff006e';
+    }
+  } catch (err) {
+    statusEl.textContent = 'Cannot connect to backend';
+    statusEl.style.color = '#ff006e';
+  }
+});
+
 // Show library status on load
 fetch('http://localhost:3456/api/folders').then(r => r.json()).then(data => {
   const statusEl = document.getElementById('folder-status');
