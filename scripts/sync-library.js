@@ -10,7 +10,7 @@
 //
 // Without arguments, scans common locations automatically.
 
-import { readdirSync, copyFileSync, existsSync, mkdirSync, statSync } from 'fs';
+import { readdirSync, copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'fs';
 import { join, basename, extname, dirname } from 'path';
 import { homedir } from 'os';
 import { execSync } from 'child_process';
@@ -125,12 +125,11 @@ for (const srcDir of sourceDirs) {
     }
   }
 
-  // Step 2: Rename meta/track-{ID}.jpg → song name
+  // Step 2: Download covers from NetEase API (more accurate than local meta/ cache)
   const metaDir = join(srcDir, 'meta');
   const lrcFiles = readdirSync(srcDir).filter(f => f.endsWith('.lrc'));
   const songNames = lrcFiles.map(f => basename(f, '.lrc'));
 
-  // Find songs that don't have same-name covers yet
   const needCover = songNames.filter(name =>
     !existsSync(join(srcDir, name + '.jpg')) &&
     !existsSync(join(srcDir, name + '.png'))
@@ -141,41 +140,50 @@ for (const srcDir of sourceDirs) {
     const trackIds = trackFiles.map(f => f.match(/track-(\d+)\.jpg/)[1]);
 
     if (trackIds.length > 0) {
-      console.log(`Resolving ${needCover.length} covers via NetEase API...`);
-      try {
-        const url = `https://music.163.com/api/song/detail?ids=[${trackIds.join(',')}]`;
-        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const data = await res.json();
+      console.log(`Downloading ${needCover.length} covers from NetEase API...`);
+      const normalize = s => s.toLowerCase().replace(/\s+/g, '').replace(/[()（）【】\[\],，、.]/g, '');
 
-        if (data.songs) {
-          const normalize = s => s.toLowerCase().replace(/\s+/g, '').replace(/[()（）【】\[\],，、.]/g, '');
+      // Batch API call (max ~100 IDs per request)
+      for (let i = 0; i < trackIds.length; i += 100) {
+        const batch = trackIds.slice(i, i + 100);
+        try {
+          const url = `https://music.163.com/api/song/detail?ids=[${batch.join(',')}]`;
+          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const data = await res.json();
 
-          for (const song of data.songs) {
-            const id = String(song.id);
-            const artists = song.artists?.map(a => a.name).join(',') || '';
-            const title = song.name || '';
-            const fullName = artists ? `${artists} - ${title}` : title;
-            const normalizedFull = normalize(fullName);
+          if (data.songs) {
+            for (const song of data.songs) {
+              const artists = song.artists?.map(a => a.name).join(',') || '';
+              const title = song.name || '';
+              const fullName = artists ? `${artists} - ${title}` : title;
+              const normalizedFull = normalize(fullName);
+              const artUrl = song.album?.picUrl;
 
-            for (const songName of [...needCover]) {
-              const normalizedSong = normalize(songName);
-              if (normalizedFull.includes(normalizedSong) ||
-                  normalizedSong.includes(normalizedFull) ||
-                  normalizedSong.includes(normalize(title))) {
-                const src = join(metaDir, `track-${id}.jpg`);
-                const dest = join(srcDir, songName + '.jpg');
-                if (existsSync(src) && !existsSync(dest)) {
-                  copyFileSync(src, dest);
-                  totalCovers++;
-                  needCover.splice(needCover.indexOf(songName), 1);
+              if (!artUrl) continue;
+
+              for (const songName of [...needCover]) {
+                const normalizedSong = normalize(songName);
+                if (normalizedFull.includes(normalizedSong) ||
+                    normalizedSong.includes(normalizedFull) ||
+                    normalizedSong.includes(normalize(title))) {
+                  const dest = join(srcDir, songName + '.jpg');
+                  if (!existsSync(dest)) {
+                    try {
+                      const imgRes = await fetch(artUrl);
+                      const buf = Buffer.from(await imgRes.arrayBuffer());
+                      writeFileSync(dest, buf);
+                      totalCovers++;
+                      needCover.splice(needCover.indexOf(songName), 1);
+                    } catch {}
+                  }
                   break;
                 }
               }
             }
           }
+        } catch (err) {
+          console.log(`  API error: ${err.message}`);
         }
-      } catch (err) {
-        console.log(`  API error: ${err.message}`);
       }
     }
   }
