@@ -55,7 +55,7 @@ export class SeratoWatcher {
       this.db = new Database(SERATO_DB_PATH, { readonly: true });
 
       const rows = this.db.prepare(`
-        SELECT deck, name, artist, start_time, end_time, played, bpm, length_ms
+        SELECT deck, name, artist, file_name, start_time, end_time, played, bpm, length_ms
         FROM history_entry
         WHERE session_id = (SELECT MAX(id) FROM history_session)
         AND end_time = -1
@@ -64,9 +64,18 @@ export class SeratoWatcher {
 
       const newDecks = new Map();
       for (const row of rows) {
+        // Use file_name as fallback when name/artist are empty
+        // file_name is like "Artist - Title.mp3"
+        let name = row.name || '';
+        let artist = row.artist || '';
+        if (!name && row.file_name) {
+          const baseName = row.file_name.replace(/\.(mp3|flac|m4a|wav|ncm)$/i, '');
+          name = baseName;
+        }
+
         newDecks.set(row.deck, {
-          name: row.name || '',
-          artist: row.artist || '',
+          name,
+          artist,
           startTime: row.start_time,
           played: row.played === 1,
           bpm: row.bpm || 0,
